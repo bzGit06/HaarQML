@@ -8,36 +8,14 @@ from ott.geometry.costs import CostFn
 from opt_einsum import contract
 from functools import partial
 
-import ot
-
-
-
 @jax.jit
-def naturalDistance(Set1, Set2):
+def avgStateSupFid(states, sigma):
     '''
-        a natural measure on the distance between two sets of quantum states
-        definition: 2*d - r1-r2
-        d: mean of inter-distance between Set1 and Set2
-        r1/r2: mean of intra-distance within Set1/Set2
+    calculate the super fidelity between two quantum state
     '''
-    # a natural measure on the distance between two sets, according to trace distance
-    r11 = 1. - jnp.mean(jnp.abs(contract('mi,ni->mn', jnp.conj(Set1), Set1)) ** 2.)
-    r22 = 1. - jnp.mean(jnp.abs(contract('mi,ni->mn', jnp.conj(Set2), Set2)) ** 2.)
-    r12 = 1. - jnp.mean(jnp.abs(contract('mi,ni->mn', jnp.conj(Set1), Set2)) ** 2.)
-    
-    return 2 * r12 - r11 - r22
-
-def WassDistance(Set1, Set2):
-    '''
-        calculate the Wasserstein distance between two sets of quantum states
-        the cost matrix is the inter trace distance between sets S1, S2
-    '''
-    D = 1. - jnp.abs(contract('mi,ni->mn', jnp.conj(Set1), Set2, backend='jax')) ** 2.
-    u0 = jnp.ones((D.shape[0],)) / D.shape[0]
-    u1 = jnp.ones((D.shape[1],)) / D.shape[1]
-    Wass_dis = ot.emd2(u0, u1, M=D)
-
-    return Wass_dis
+    rho = jnp.mean(contract('bi, bj->bij', states, states.conj()), axis=0)
+    supF = jnp.real(jnp.trace(rho @ sigma)) + jnp.sqrt((1. - jnp.real(jnp.trace(rho @ rho))) * (1. - jnp.real(jnp.trace(sigma @ sigma))) + 1e-12)
+    return supF
 
 
 @jax.tree_util.register_pytree_node_class
@@ -60,8 +38,3 @@ def sinkhornDistance(Set1, Set2, prob1=None, prob2=None, reg=0.01, threshold=0.0
     return ot.reg_ot_cost
 
 
-@jax.jit
-def avgStateSupFid(states, sigma):
-    rho = jnp.mean(contract('bi, bj->bij', states, states.conj()), axis=0)
-    supF = jnp.real(jnp.trace(rho @ sigma)) + jnp.sqrt((1. - jnp.real(jnp.trace(rho @ rho))) * (1. - jnp.real(jnp.trace(sigma @ sigma))) + 1e-12)
-    return supF
