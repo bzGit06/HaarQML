@@ -15,6 +15,20 @@ import datetime
 K = tc.set_backend("jax")
 tc.set_dtype('complex64')
 
+
+def HaarSampleGeneration(Ndata, n, seed):
+    '''
+    generate random haar states,
+    used as inputs in the t=T step for backward denoise
+    Args:
+    Ndata: number of samples in dataset
+    '''
+    np.random.seed(seed)
+    states_T = unitary_group.rvs(dim=2**n, size=Ndata)[:,:,0]
+
+    return jnp.array(states_T)
+    
+
 def paramQC(input, params, n_tot, L):
     '''
     parameteric circuit following hardware efficient ansatz
