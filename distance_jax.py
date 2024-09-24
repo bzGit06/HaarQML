@@ -10,12 +10,16 @@ from functools import partial
 
 @jax.jit
 def avgStateSupFid(states, sigma):
-    '''
-    calculate the super fidelity between two quantum state
-    '''
-    rho = jnp.mean(contract('bi, bj->bij', states, states.conj()), axis=0)
-    supF = jnp.real(jnp.trace(rho @ sigma)) + jnp.sqrt((1. - jnp.real(jnp.trace(rho @ rho))) * (1. - jnp.real(jnp.trace(sigma @ sigma))) + 1e-12)
+    rho = jnp.mean(contract('bi, bj->bij', states, states.conj(), backend='jax'), axis=0)
+    supF = jnp.real(jnp.trace(rho @ sigma)) \
+        + jnp.sqrt((1. - jnp.real(jnp.trace(rho @ rho))) * (1. - jnp.real(jnp.trace(sigma @ sigma))) + 1e-12)
     return supF
+
+
+@jax.jit
+def avgStateSupFid_pure(states, psi0):
+    rho = jnp.mean(contract('bi, bj->bij', states, states.conj(), backend='jax'), axis=0)
+    return jnp.real(psi0.conj() @ rho @ psi0)
 
 
 @jax.tree_util.register_pytree_node_class

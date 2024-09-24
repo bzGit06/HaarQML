@@ -1,9 +1,5 @@
 import numpy as np
-from scipy.stats import unitary_group, kstest, uniform
-from opt_einsum import contract
-from itertools import product
-
-from distance_jax import sinkhornDistance, avgStateSupFid
+from distance_jax import sinkhornDistance, avgStateSupFid, avgStateSupFid_pure
 
 import jax
 import jax.numpy as jnp
@@ -15,7 +11,7 @@ import datetime
 import os
 
 
-def TrainingAvgState_t(model, t, tau, inputs_0, sigma0, sigmaT, params_tot=[], epochs=1001):
+def TrainingAvgState_t(model, t, tau, inputs_0, psi0, sigmaT, params_tot=[], epochs=1001):
     Ndata = len(inputs_0)
 
     loss_hist = [] # record of training history
@@ -30,27 +26,27 @@ def TrainingAvgState_t(model, t, tau, inputs_0, sigma0, sigmaT, params_tot=[], e
     optimizer = optax.adam(learning_rate = 0.0005)
     opt_state = optimizer.init(params_t)
 
-    def loss_func(params_t, sigma1, sigma2):
+    def loss_func(params_t, psi, sigma):
         seed = int(1e6 * datetime.datetime.now().timestamp())
         key = jax.random.PRNGKey(seed)
 
         key, subkey = jax.random.split(key)
         input_t_1 = model.prepareInput_t(inputs_0, params_tot, t)
         output_1 = model.pQCoutput(input_t_1, params_t, subkey)
-        loss1 = 1. - avgStateSupFid(output_1, sigma1)
+        loss1 = 1. - avgStateSupFid_pure(output_1, psi)
         
         _, subkey = jax.random.split(key)
         input_t_2 = model.prepareInput_t(inputs_0, params_tot, t)
         output_2 = model.pQCoutput(input_t_2, params_t, subkey)
         model.current_states = output_2
-        loss2 = 1. - avgStateSupFid(output_2, sigma2)
+        loss2 = 1. - avgStateSupFid(output_2, sigma)
 
         return (1-tau) * loss1 + tau * loss2, output_2
 
     loss_func_vg = jax.jit(jax.value_and_grad(loss_func, has_aux=True))
     #@partial(jax.jit, static_argnums=(2, ))
-    def update(params_t, sigma1, sigma2, opt_state):
-        (loss_value, new_states), grads = loss_func_vg(params_t, sigma1, sigma2)
+    def update(params_t, psi, sigma, opt_state):
+        (loss_value, new_states), grads = loss_func_vg(params_t, psi, sigma)
 
         updates, new_opt_state = optimizer.update(grads, opt_state, params_t)
         new_params_t = optax.apply_updates(params_t, updates)
@@ -62,7 +58,7 @@ def TrainingAvgState_t(model, t, tau, inputs_0, sigma0, sigmaT, params_tot=[], e
         if step % (epochs//50) == 0:
             params_hist.append(params_t)
 
-        params_t, opt_state, loss_value, states_t = update(params_t, sigma0, sigmaT, opt_state)
+        params_t, opt_state, loss_value, states_t = update(params_t, psi0, sigmaT, opt_state)
         loss_hist.append(loss_value) # record the current loss
         
         if step % 1000 == 0:

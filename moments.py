@@ -4,8 +4,12 @@ import jax.numpy as jnp
 from opt_einsum import contract
 from functools import partial
 from itertools import product, permutations
+import qutip as qt
 
+
+@partial(jax.jit, static_argnums=(2, ))
 def rhoMMT(states, probs=None, K=1):
+    # evluate K-th moment density operator in parallel
     rho1 = contract('mi, mj->mij', states, states.conj())
     rhok = rho1
     for _ in range(K-1):
@@ -17,7 +21,9 @@ def rhoMMT(states, probs=None, K=1):
     else:
         return np.sum(probs[:, np.newaxis, np.newaxis]*rhok, axis=0)
 
+@partial(jax.jit, static_argnums=(2, ))
 def rhoMMT_seq(states, probs=None, K=1, slice=1):
+    # evluate K-th moment density operator in sequential
     N = len(probs)
     rho_K = 0
     rhoMMT_jit = jax.jit(partial(rhoMMT, K=K))
@@ -29,10 +35,24 @@ def rhoMMT_seq(states, probs=None, K=1, slice=1):
             rho_K += rhoMMT_jit(each, probs[slice*i: slice*(i+1)])
     return rho_K
 
+@partial(jax.jit, static_argnums=(2, ))
+def framePot(states, probs=None, K=1):
+    inners = jnp.abs(contract('mi, ni->mn', states.conj(), states))
+    if probs is None:
+        F_K = jnp.mean(inners**(2*K))
+    else:
+        F_K = jnp.mean(contract('m,n->mn', probs, probs) * inners**(2*K))
+    return F_K
 
-def traceDist(rho1, rho2):
-    vals = jnp.linalg.eigvalsh(rho1 - rho2)
-    return jnp.sum(jnp.abs(vals)) * 0.5
+
+def mmtDist_p(rho1, rho2, p):
+    # p-th order moment distance
+    if p==1:
+        ord = 'nuc'
+    elif p==2:
+        ord = 'fro'
+    return jnp.linalg.norm(rho1 - rho2, ord=ord)
+
 
 def permGroup(K):
     sigmas = np.stack(list(permutations(range(K))))
@@ -60,3 +80,24 @@ def haarEnsembleMMT(n, K):
     denom = np.prod(np.arange(K) + 2**n)
     
     return jnp.array(rho / denom)
+
+def pauliTwirl_K2(n, rho=None, Cs=None):
+    paulis = [qt.qeye(2), qt.sigmax(), qt.sigmay(), qt.sigmaz()]
+    rho2 = 0
+    for i, s in enumerate(product(range(4), repeat=n)):
+        P = qt.tensor([paulis[x] for x in s])
+        if Cs is None:
+            c_P = qt.expect(P, rho)
+        else:
+            c_P = Cs[i]
+        rho2 += c_P**2 * qt.tensor(P, P)
+    rho2 /= 4**n
+    return rho2
+
+def pauliTwirlEnsemble(n, Psi0):
+    paulis = [qt.qeye(2), qt.sigmax(), qt.sigmay(), qt.sigmaz()]
+    states = []
+    for s in product(range(4), repeat=n):
+        P = qt.tensor([paulis[x] for x in s])
+        states.append(P * Psi0)
+    return states
