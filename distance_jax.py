@@ -8,13 +8,23 @@ from ott.geometry.costs import CostFn
 from opt_einsum import contract
 from functools import partial
 
+# @jax.jit
+# def avgStateSupFid(states, sigma):
+#     rho = jnp.mean(contract('bi, bj->bij', states, states.conj(), backend='jax'), axis=0)
+#     esf2_prod = (1. - jnp.trace(rho @ rho)) * (1. - jnp.trace(sigma @ sigma))
+#     supF = jnp.trace(rho @ sigma) + jnp.sqrt(esf2_prod)
+
+#     return jnp.real(supF)
+
 @jax.jit
 def avgStateSupFid(states, sigma):
-    rho = jnp.mean(contract('bi, bj->bij', states, states.conj(), backend='jax'), axis=0)
-    supF = jnp.real(jnp.trace(rho @ sigma)) \
-        + jnp.sqrt((1. - jnp.real(jnp.trace(rho @ rho))) * (1. - jnp.real(jnp.trace(sigma @ sigma))) + 1e-12)
-    return supF
+    rho = jnp.mean(jnp.einsum('bi, bj->bij', states, states.conj()), axis=0)
+    trace_rs = jnp.einsum('ij, ji->', rho, sigma)
+    trace_rr = jnp.einsum('ij, ji->', rho, rho)
+    trace_ss = jnp.einsum('ij, ji->', sigma, sigma)
+    supF = trace_rs + jnp.sqrt((1. - trace_rr) * (1. - trace_ss))
 
+    return jnp.real(supF)
 
 @jax.jit
 def avgStateSupFid_pure(states, psi0):
