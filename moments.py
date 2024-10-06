@@ -21,18 +21,17 @@ def rhoMMT(states, probs=None, K=1):
     else:
         return np.sum(probs[:, np.newaxis, np.newaxis]*rhok, axis=0)
 
-@partial(jax.jit, static_argnums=(2, ))
+@partial(jax.jit, static_argnums=(2, 3))
 def rhoMMT_seq(states, probs=None, K=1, slice=1):
     # evluate K-th moment density operator in sequential
-    N = len(probs)
+    N = len(states)
     rho_K = 0
-    rhoMMT_jit = jax.jit(partial(rhoMMT, K=K))
     for i in range(N//slice):
         each = states[slice*i: slice*(i+1)]
         if probs is None:
-            rho_K += rhoMMT_jit(each)
+            rho_K += rhoMMT(each, K=K)
         else:
-            rho_K += rhoMMT_jit(each, probs[slice*i: slice*(i+1)])
+            rho_K += rhoMMT(each, probs[slice*i: slice*(i+1)], K=K)
     return rho_K
 
 @partial(jax.jit, static_argnums=(2, ))
@@ -44,6 +43,17 @@ def framePot(states, probs=None, K=1):
         F_K = jnp.mean(contract('m,n->mn', probs, probs) * inners**(2*K))
     return F_K
 
+@partial(jax.jit, static_argnums=(2, 3))
+def framePot_seq(states, probs=None, K=1, slice=1):
+    # evaluate frame potential in sequential
+    N = len(states)
+    F_K = 0
+    for i in range(N//slice):
+        each = jnp.abs(contract('mi, ni->mn', states.conj(), states[slice*i: slice*(i+1)]))**(2*K)
+        if not (probs is None):
+            each = contract('m, n->mn', probs, probs[slice*i: slice*(i+1)])*each
+        F_K += jnp.sum(each)
+    return F_K / N**2
 
 def mmtDist_p(rho1, rho2, p):
     # p-th order moment distance
