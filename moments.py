@@ -91,15 +91,12 @@ def haarEnsembleMMT(n, K):
     
     return jnp.array(rho / denom)
 
-def pauliTwirl_K2(n, rho=None, Cs=None):
+def pauliTwirl_K2(n, rho=None):
     paulis = [qt.qeye(2), qt.sigmax(), qt.sigmay(), qt.sigmaz()]
     rho2 = 0
     for i, s in enumerate(product(range(4), repeat=n)):
         P = qt.tensor([paulis[x] for x in s])
-        if Cs is None:
-            c_P = qt.expect(P, rho)
-        else:
-            c_P = Cs[i]
+        c_P = qt.expect(P, rho)
         rho2 += c_P**2 * qt.tensor(P, P)
     rho2 /= 4**n
     return rho2
