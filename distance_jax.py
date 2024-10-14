@@ -26,7 +26,7 @@ def avgStateFid_id(states):
     d = states.shape[1]
     rho = jnp.mean(jnp.einsum('bi, bj->bij', states, states.conj()), axis=0)
     val = jnp.linalg.eigvalsh(rho)
-    F = jnp.sum(jnp.sqrt(val))**2 / d
+    F = jnp.sum(jnp.sqrt(jnp.abs(val)))**2 / d
     return jnp.real(F)
 
 @jax.jit
