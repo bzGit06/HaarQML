@@ -38,7 +38,6 @@ def paramQC(input, params, n_tot, L):
     n_tot: total number of qubits
     L = layers of circuit
     '''
-
     c = tc.Circuit(n_tot, inputs=input)
 
     for l in range(L):
@@ -72,8 +71,27 @@ class QTM():
         self.L = L
         # embed the circuit to a vectorized pytorch neural network layer
         self.pQC_vmap = K.jit(K.vmap(partial(paramQC, n_tot=self.n_tot, L=self.L), 
-                                       vectorized_argnums=0))
+                                     vectorized_argnums=0))
     
+
+    # @partial(jax.jit, static_argnums=(0, ))
+    # def randomMeasure(self, inputs, key):
+    #     '''
+    #     Given the inputs on both data & ancilla qubits before measurmenets,
+    #     calculate the post-measurement state.
+    #     The measurement and state output are calculated in parallel for data samples
+    #     Args:
+    #     inputs: states to be measured, first na qubit is ancilla
+    #     '''
+    #     n_batch = inputs.shape[0]
+    #     m_probs = jnp.abs(jnp.reshape(inputs, [n_batch, 2 ** self.na, 2 ** self.n])) ** 2.0
+    #     m_probs = jnp.log(jnp.sum(m_probs, axis=2))
+    #     m_res = jax.random.categorical(key, m_probs)
+    #     indices = 2 ** self.n * jnp.reshape(m_res, [-1, 1]) + jnp.arange(2 ** self.n)
+    #     post_state = jnp.take_along_axis(inputs, indices, axis=1)
+    #     post_state /= jnp.linalg.norm(post_state, axis=1)[:, jnp.newaxis]
+        
+    #     return post_state
 
     @partial(jax.jit, static_argnums=(0, ))
     def randomMeasure(self, inputs, key):
@@ -84,12 +102,11 @@ class QTM():
         Args:
         inputs: states to be measured, first na qubit is ancilla
         '''
-        n_batch = inputs.shape[0]
-        m_probs = jnp.abs(jnp.reshape(inputs, [n_batch, 2 ** self.na, 2 ** self.n])) ** 2.0
-        m_probs = jnp.log(jnp.sum(m_probs, axis=2))
+        psi = jnp.reshape(inputs, [-1, 2 ** self.na, 2 ** self.n]).transpose(1, 2, 0)
+        m_probs = jnp.log(jnp.sum(jnp.abs(psi) ** 2.0, axis=1)).T
         m_res = jax.random.categorical(key, m_probs)
-        indices = 2 ** self.n * jnp.reshape(m_res, [-1, 1]) + jnp.arange(2 ** self.n)
-        post_state = jnp.take_along_axis(inputs, indices, axis=1)
+        
+        post_state = jnp.choose(m_res, psi, mode='wrap').T
         post_state /= jnp.linalg.norm(post_state, axis=1)[:, jnp.newaxis]
         
         return post_state
@@ -99,7 +116,7 @@ class QTM():
         output_full = self.pQC_vmap(inputs, params)
         output_postM = self.randomMeasure(output_full, key)
         return output_postM
-
+    
     def prepareInput_t(self, inputs_0, params_tot, t):
         '''
         prepare the input samples for step t including zero ancillas
@@ -112,7 +129,7 @@ class QTM():
         seed = int(1e6 * datetime.datetime.now().timestamp())
         key = jax.random.PRNGKey(seed)
 
-        zero_tensor = jnp.zeros(shape=(Ndata, 2**self.n_tot-2**self.n), dtype=jnp.complex64)
+        zero_tensor = jnp.zeros(shape=(Ndata, 2**self.n_tot - 2**self.n), dtype=jnp.complex64)
         inputs_t = jnp.concatenate([inputs_0, zero_tensor], axis=1)
         for tt in range(t):
             key, subkey = jax.random.split(key)
