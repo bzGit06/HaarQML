@@ -55,6 +55,24 @@ def framePot_seq(states, probs=None, K=1, slice=1):
         F_K += jnp.sum(each)
     return F_K / N**2
 
+@jax.jit
+def fp(x, y, K=1):
+    return jnp.abs(jnp.dot(x.conj(), y)) ** (2 * K)
+
+
+@partial(jax.jit, static_argnums=(1, 2))
+def framePot_batched(states, K=1, batch_sizes=None):
+    def inner_map(x): return jnp.mean(jax.vmap(lambda y: fp(x, y, K=K))(states))
+
+    if batch_sizes is None:
+        return jnp.mean(jax.lax.map(inner_map, states))
+    else:
+        f = []
+        for k in range(len(states)//batch_sizes):
+            f.append(jnp.mean(jax.lax.map(inner_map, states[batch_sizes*k: batch_sizes*(k+1)])))
+        return jnp.mean(jnp.array(f))
+
+
 def mmtDist_p(rho1, rho2, p):
     # p-th order moment distance
     if p==1:
