@@ -60,10 +60,6 @@ def framePot_seq(states, probs=None, K=1, slice=1):
         F_K += jnp.sum(each)
     return F_K / N**2
 
-<<<<<<< HEAD
-=======
-
->>>>>>> b849af0695f36349a491f436adfbf21cc5f80f0b
 @jax.jit
 def fp(x, y, K=1):
     return jnp.abs(jnp.dot(x.conj(), y)) ** (2 * K)
@@ -73,7 +69,6 @@ def fp(x, y, K=1):
 def framePot_batched(states, K=1, batch_sizes=None):
     def inner_map(x): return jnp.mean(jax.vmap(lambda y: fp(x, y, K=K))(states))
 
-<<<<<<< HEAD
     if batch_sizes is None:
         return jnp.mean(jax.lax.map(inner_map, states))
     else:
@@ -81,66 +76,3 @@ def framePot_batched(states, K=1, batch_sizes=None):
         for k in range(len(states)//batch_sizes):
             f.append(jnp.mean(jax.lax.map(inner_map, states[batch_sizes*k: batch_sizes*(k+1)])))
         return jnp.mean(jnp.array(f))
-=======
-    return jnp.mean(jax.lax.map(inner_map, states, batch_size=batch_sizes))
->>>>>>> b849af0695f36349a491f436adfbf21cc5f80f0b
-
-
-def mmtDist_p(rho1, rho2, p):
-    # p-th order moment distance
-    if p == 1:
-        ord = 'nuc'
-    elif p == 2:
-        ord = 'fro'
-    return jnp.linalg.norm(rho1 - rho2, ord=ord)
-
-
-def permGroup(K):
-    sigmas = np.stack(list(permutations(range(K))))
-    return sigmas
-
-
-def permOp(sigma, n, K, basis_full):
-    '''
-    given a permutation sigma, generate the operator for n-qubit state
-    '''
-    d = 2**n
-    basis_perm_full = basis_full[:, sigma]  # permute basis following sigma
-    op = np.zeros((d ** K, d ** K))
-    pos_perm_full = np.sum(np.stack([basis_perm_full[:, i] * (d**(K-1-i)) for i in range(K)]),
-                           axis=0)  # find position of permutated basis
-    # generate the permutation operator
-    op[pos_perm_full, np.arange(d ** K)] = 1
-
-    return op
-
-
-def haarEnsembleMMT(n, K):
-    basis_full = np.stack(product(range(2**n), repeat=K))
-    sigmas = permGroup(K)
-    rho = 0
-    for k in range(len(sigmas)):
-        rho += permOp(sigmas[k], n, K, basis_full)
-    denom = np.prod(np.arange(K) + 2**n)
-
-    return jnp.array(rho / denom)
-
-
-def pauliTwirl_K2(n, rho=None):
-    paulis = [qt.qeye(2), qt.sigmax(), qt.sigmay(), qt.sigmaz()]
-    rho2 = 0
-    for i, s in enumerate(product(range(4), repeat=n)):
-        P = qt.tensor([paulis[x] for x in s])
-        c_P = qt.expect(P, rho)
-        rho2 += c_P**2 * qt.tensor(P, P)
-    rho2 /= 4**n
-    return rho2
-
-
-def pauliTwirlEnsemble(n, Psi0):
-    paulis = [qt.qeye(2), qt.sigmax(), qt.sigmay(), qt.sigmaz()]
-    states = []
-    for s in product(range(4), repeat=n):
-        P = qt.tensor([paulis[x] for x in s])
-        states.append(P * Psi0)
-    return states
