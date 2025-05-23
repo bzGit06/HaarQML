@@ -60,7 +60,10 @@ def framePot_seq(states, probs=None, K=1, slice=1):
         F_K += jnp.sum(each)
     return F_K / N**2
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> b849af0695f36349a491f436adfbf21cc5f80f0b
 @jax.jit
 def fp(x, y, K=1):
     return jnp.abs(jnp.dot(x.conj(), y)) ** (2 * K)
@@ -70,7 +73,17 @@ def fp(x, y, K=1):
 def framePot_batched(states, K=1, batch_sizes=None):
     def inner_map(x): return jnp.mean(jax.vmap(lambda y: fp(x, y, K=K))(states))
 
+<<<<<<< HEAD
+    if batch_sizes is None:
+        return jnp.mean(jax.lax.map(inner_map, states))
+    else:
+        f = []
+        for k in range(len(states)//batch_sizes):
+            f.append(jnp.mean(jax.lax.map(inner_map, states[batch_sizes*k: batch_sizes*(k+1)])))
+        return jnp.mean(jnp.array(f))
+=======
     return jnp.mean(jax.lax.map(inner_map, states, batch_size=batch_sizes))
+>>>>>>> b849af0695f36349a491f436adfbf21cc5f80f0b
 
 
 def mmtDist_p(rho1, rho2, p):
